@@ -20,6 +20,8 @@ type rowScanner interface {
 }
 
 const uniqueViolationCode = "23505"
+const companyPrimaryKeyConstraint = "companies_pkey"
+const companyNameUniqueConstraint = "companies_name_key"
 
 var psql = sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
@@ -58,7 +60,7 @@ func (r *CompanyRepository) Create(ctx context.Context, company *companydomain.C
 		return fmt.Errorf("build create company query: %w", err)
 	}
 
-	_, err = r.pool.Exec(ctx, query, args...)
+	_, err = executorFromContext(ctx, r.pool).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("create company: %w", mapPostgresError(err))
 	}
@@ -80,7 +82,7 @@ func (r *CompanyRepository) Update(ctx context.Context, company *companydomain.C
 		return fmt.Errorf("build update company query: %w", err)
 	}
 
-	tag, err := r.pool.Exec(ctx, query, args...)
+	tag, err := executorFromContext(ctx, r.pool).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("update company: %w", mapPostgresError(err))
 	}
@@ -99,7 +101,7 @@ func (r *CompanyRepository) Delete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("build delete company query: %w", err)
 	}
 
-	tag, err := r.pool.Exec(ctx, query, args...)
+	tag, err := executorFromContext(ctx, r.pool).Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("delete company: %w", mapPostgresError(err))
 	}
@@ -118,7 +120,7 @@ func (r *CompanyRepository) GetByID(ctx context.Context, id uuid.UUID) (*company
 		return nil, fmt.Errorf("build get company by id query: %w", err)
 	}
 
-	company, err := scanCompany(r.pool.QueryRow(ctx, query, args...))
+	company, err := scanCompany(executorFromContext(ctx, r.pool).QueryRow(ctx, query, args...))
 	if err != nil {
 		return nil, fmt.Errorf("get company by id: %w", err)
 	}
@@ -134,7 +136,7 @@ func (r *CompanyRepository) GetByName(ctx context.Context, name string) (*compan
 		return nil, fmt.Errorf("build get company by name query: %w", err)
 	}
 
-	company, err := scanCompany(r.pool.QueryRow(ctx, query, args...))
+	company, err := scanCompany(executorFromContext(ctx, r.pool).QueryRow(ctx, query, args...))
 	if err != nil {
 		return nil, fmt.Errorf("get company by name: %w", err)
 	}
@@ -188,7 +190,14 @@ func scanCompany(row rowScanner) (*companydomain.Company, error) {
 func mapPostgresError(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == uniqueViolationCode {
-		return fmt.Errorf("map postgres error: %w", companydomain.ErrDuplicateName)
+		switch pgErr.ConstraintName {
+		case companyPrimaryKeyConstraint:
+			return fmt.Errorf("map postgres error: %w", companydomain.ErrDuplicateID)
+		case companyNameUniqueConstraint:
+			return fmt.Errorf("map postgres error: %w", companydomain.ErrDuplicateName)
+		default:
+			return fmt.Errorf("map postgres error: %w", err)
+		}
 	}
 
 	return fmt.Errorf("map postgres error: %w", err)

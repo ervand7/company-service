@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -36,7 +37,11 @@ type AuthConfig struct {
 }
 
 type EventsConfig struct {
-	Producer string
+	Producer           string
+	KafkaBrokers       []string
+	KafkaTopic         string
+	OutboxPollInterval time.Duration
+	OutboxBatchSize    int
 }
 
 func Load() (Config, error) {
@@ -59,7 +64,11 @@ func Load() (Config, error) {
 			JWTSecret: os.Getenv("JWT_SECRET"),
 		},
 		Events: EventsConfig{
-			Producer: getEnv("EVENT_PRODUCER", "log"),
+			Producer:           getEnv("EVENT_PRODUCER", "log"),
+			KafkaBrokers:       getCSV("KAFKA_BROKERS", []string{"localhost:9092"}),
+			KafkaTopic:         getEnv("KAFKA_TOPIC", "company.events"),
+			OutboxPollInterval: getDuration("OUTBOX_POLL_INTERVAL", 2*time.Second),
+			OutboxBatchSize:    getInt("OUTBOX_BATCH_SIZE", 10),
 		},
 	}
 
@@ -103,4 +112,25 @@ func getDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return parsed
+}
+
+func getCSV(key string, fallback []string) []string {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	if len(result) == 0 {
+		return fallback
+	}
+
+	return result
 }

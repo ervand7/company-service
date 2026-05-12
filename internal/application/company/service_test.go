@@ -24,6 +24,7 @@ func TestCreateCompanySuccess(t *testing.T) {
 	service := appcompany.NewService(repo, events, &testLogger)
 
 	input := appcompany.CreateInput{
+		ID:                uuid.New(),
 		Name:              "  Acme  ",
 		Description:       "  description  ",
 		AmountOfEmployees: 10,
@@ -33,7 +34,7 @@ func TestCreateCompanySuccess(t *testing.T) {
 
 	repo.On("GetByName", ctx, "Acme").Return((*companydomain.Company)(nil), companydomain.ErrNotFound).Once()
 	repo.On("Create", ctx, mock.MatchedBy(func(c *companydomain.Company) bool {
-		return c.ID != uuid.Nil &&
+		return c.ID == input.ID &&
 			c.Name == "Acme" &&
 			c.Description == "description" &&
 			c.AmountOfEmployees == 10 &&
@@ -58,6 +59,40 @@ func TestCreateCompanySuccess(t *testing.T) {
 	}
 	if created.Name != "Acme" {
 		t.Fatalf("expected trimmed company name, got %q", created.Name)
+	}
+	if created.ID != input.ID {
+		t.Fatalf("expected company id %s, got %s", input.ID, created.ID)
+	}
+}
+
+func TestCreateCompanyWithOutboxStoresEventInTransaction(t *testing.T) {
+	ctx := context.Background()
+	repo := mocks.NewRepository(t)
+	outbox := mocks.NewOutboxStore(t)
+	tx := mocks.NewTransactionRunner(t)
+	service := appcompany.NewServiceWithOutbox(repo, outbox, tx, &testLogger)
+	var storedEvent appcompany.Event
+
+	tx.On("WithinTransaction", ctx, mock.AnythingOfType("func(context.Context) error")).
+		Return(func(ctx context.Context, fn func(context.Context) error) error {
+			return fn(ctx)
+		}).
+		Once()
+	repo.On("GetByName", mock.Anything, "Acme").Return((*companydomain.Company)(nil), companydomain.ErrNotFound).Once()
+	repo.On("Create", mock.Anything, mock.MatchedBy(func(c *companydomain.Company) bool {
+		return c.Name == "Acme"
+	})).Return(nil).Once()
+	outbox.On("Store", mock.Anything, mock.MatchedBy(func(event appcompany.Event) bool {
+		storedEvent = event
+		return event.Type == appcompany.EventCompanyCreated && event.Company != nil
+	})).Return(nil).Once()
+
+	created, err := service.CreateCompany(ctx, validCreateInput("Acme"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storedEvent.CompanyID != created.ID || storedEvent.Company == nil {
+		t.Fatalf("unexpected outbox event: %+v", storedEvent)
 	}
 }
 
@@ -554,6 +589,7 @@ func TestGetCompanyReturnsRepositoryError(t *testing.T) {
 
 func validCreateInput(name string) appcompany.CreateInput {
 	return appcompany.CreateInput{
+		ID:                uuid.New(),
 		Name:              name,
 		Description:       "description",
 		AmountOfEmployees: 10,

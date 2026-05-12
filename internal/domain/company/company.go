@@ -33,9 +33,13 @@ type Patch struct {
 }
 
 func New(name string, description string, amountOfEmployees int, registered bool, companyType CompanyType) (*Company, error) {
+	return NewWithID(uuid.New(), name, description, amountOfEmployees, registered, companyType)
+}
+
+func NewWithID(id uuid.UUID, name string, description string, amountOfEmployees int, registered bool, companyType CompanyType) (*Company, error) {
 	now := time.Now().UTC()
 	c := &Company{
-		ID:                uuid.New(),
+		ID:                id,
 		Name:              strings.TrimSpace(name),
 		Description:       strings.TrimSpace(description),
 		AmountOfEmployees: amountOfEmployees,

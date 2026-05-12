@@ -31,6 +31,8 @@ func writeAppError(w nethttp.ResponseWriter, err error) {
 		writeJSON(w, nethttp.StatusBadRequest, errorResponse{Error: "empty patch body"})
 	case errors.Is(err, companydomain.ErrNotFound):
 		writeJSON(w, nethttp.StatusNotFound, errorResponse{Error: "company not found"})
+	case errors.Is(err, companydomain.ErrDuplicateID):
+		writeJSON(w, nethttp.StatusConflict, errorResponse{Error: "company id already exists"})
 	case errors.Is(err, companydomain.ErrDuplicateName):
 		writeJSON(w, nethttp.StatusConflict, errorResponse{Error: "company name already exists"})
 	default:
@@ -45,7 +47,7 @@ func appErrorStatus(err error) int {
 		return nethttp.StatusBadRequest
 	case errors.Is(err, companydomain.ErrNotFound):
 		return nethttp.StatusNotFound
-	case errors.Is(err, companydomain.ErrDuplicateName):
+	case errors.Is(err, companydomain.ErrDuplicateID), errors.Is(err, companydomain.ErrDuplicateName):
 		return nethttp.StatusConflict
 	default:
 		return nethttp.StatusInternalServerError

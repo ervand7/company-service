@@ -87,6 +87,12 @@ func TestWriteAppError(t *testing.T) {
 			wantBody:   errorResponse{Error: "company name already exists"},
 		},
 		{
+			name:       "duplicate id",
+			err:        fmt.Errorf("create company: %w", companydomain.ErrDuplicateID),
+			wantStatus: nethttp.StatusConflict,
+			wantBody:   errorResponse{Error: "company id already exists"},
+		},
+		{
 			name:       "unknown error",
 			err:        errors.New("database unavailable"),
 			wantStatus: nethttp.StatusInternalServerError,
@@ -154,6 +160,11 @@ func TestAppErrorStatus(t *testing.T) {
 		{
 			name: "duplicate name",
 			err:  fmt.Errorf("create company: %w", companydomain.ErrDuplicateName),
+			want: nethttp.StatusConflict,
+		},
+		{
+			name: "duplicate id",
+			err:  fmt.Errorf("create company: %w", companydomain.ErrDuplicateID),
 			want: nethttp.StatusConflict,
 		},
 		{

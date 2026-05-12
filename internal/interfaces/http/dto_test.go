@@ -11,6 +11,7 @@ import (
 )
 
 func TestCreateCompanyRequestToInput(t *testing.T) {
+	id := uuid.New()
 	name := "Acme"
 	description := "description"
 	employees := 10
@@ -18,6 +19,7 @@ func TestCreateCompanyRequestToInput(t *testing.T) {
 	companyType := string(companydomain.TypeCorporations)
 
 	input, err := (createCompanyRequest{
+		ID:                stringPtr(id.String()),
 		Name:              &name,
 		Description:       &description,
 		AmountOfEmployees: &employees,
@@ -28,6 +30,9 @@ func TestCreateCompanyRequestToInput(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if input.ID != id {
+		t.Fatalf("expected id %q, got %q", id, input.ID)
+	}
 	if input.Name != name {
 		t.Fatalf("expected name %q, got %q", name, input.Name)
 	}
@@ -46,12 +51,14 @@ func TestCreateCompanyRequestToInput(t *testing.T) {
 }
 
 func TestCreateCompanyRequestToInputDefaultsMissingDescription(t *testing.T) {
+	id := uuid.NewString()
 	name := "Acme"
 	employees := 10
 	registered := false
 	companyType := string(companydomain.TypeNonProfit)
 
 	input, err := (createCompanyRequest{
+		ID:                &id,
 		Name:              &name,
 		AmountOfEmployees: &employees,
 		Registered:        &registered,
@@ -80,10 +87,37 @@ func TestCreateCompanyRequestToInputRequiresFields(t *testing.T) {
 		t.Fatalf("expected ValidationError, got %T", err)
 	}
 
-	for _, field := range []string{"name", "amount_of_employees", "registered", "type"} {
+	for _, field := range []string{"id", "name", "amount_of_employees", "registered", "type"} {
 		if validationErr.Fields[field] != "is required" {
 			t.Fatalf("expected required validation for %s, got %q", field, validationErr.Fields[field])
 		}
+	}
+}
+
+func TestCreateCompanyRequestToInputRejectsInvalidID(t *testing.T) {
+	id := "not-a-uuid"
+	name := "Acme"
+	employees := 10
+	registered := true
+	companyType := string(companydomain.TypeCorporations)
+
+	_, err := (createCompanyRequest{
+		ID:                &id,
+		Name:              &name,
+		AmountOfEmployees: &employees,
+		Registered:        &registered,
+		Type:              &companyType,
+	}).toInput()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+
+	var validationErr companydomain.ValidationError
+	if !errors.As(err, &validationErr) {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+	if validationErr.Fields["id"] != "must be a valid uuid" {
+		t.Fatalf("expected invalid id validation, got %q", validationErr.Fields["id"])
 	}
 }
 
@@ -177,4 +211,8 @@ func TestToCompanyResponse(t *testing.T) {
 	if !response.UpdatedAt.Equal(updatedAt) {
 		t.Fatalf("expected updated at %v, got %v", updatedAt, response.UpdatedAt)
 	}
+}
+
+func stringPtr(value string) *string {
+	return &value
 }

@@ -5,10 +5,12 @@ import (
 	"testing"
 
 	"company-service/internal/domain/company"
+
+	"github.com/google/uuid"
 )
 
 func TestNewValidatesRequiredFields(t *testing.T) {
-	_, err := company.New("", "", -1, true, "Invalid")
+	_, err := company.NewWithID(uuid.Nil, "", "", -1, true, "Invalid")
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -18,7 +20,7 @@ func TestNewValidatesRequiredFields(t *testing.T) {
 		t.Fatalf("expected ValidationError, got %T", err)
 	}
 
-	for _, field := range []string{"name", "amount_of_employees", "type"} {
+	for _, field := range []string{"id", "name", "amount_of_employees", "type"} {
 		if validationErr.Fields[field] == "" {
 			t.Fatalf("expected validation error for %s", field)
 		}

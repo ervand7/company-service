@@ -21,6 +21,10 @@ var configEnvKeys = []string{
 	"DB_MAX_CONN_IDLE_TIME",
 	"JWT_SECRET",
 	"EVENT_PRODUCER",
+	"KAFKA_BROKERS",
+	"KAFKA_TOPIC",
+	"OUTBOX_POLL_INTERVAL",
+	"OUTBOX_BATCH_SIZE",
 }
 
 func TestLoadUsesDefaultsForOptionalValues(t *testing.T) {
@@ -69,6 +73,18 @@ func TestLoadUsesDefaultsForOptionalValues(t *testing.T) {
 	if cfg.Events.Producer != "log" {
 		t.Fatalf("expected default event producer, got %q", cfg.Events.Producer)
 	}
+	if strings.Join(cfg.Events.KafkaBrokers, ",") != "localhost:9092" {
+		t.Fatalf("expected default kafka brokers, got %v", cfg.Events.KafkaBrokers)
+	}
+	if cfg.Events.KafkaTopic != "company.events" {
+		t.Fatalf("expected default kafka topic, got %q", cfg.Events.KafkaTopic)
+	}
+	if cfg.Events.OutboxPollInterval != 2*time.Second {
+		t.Fatalf("expected default outbox poll interval, got %s", cfg.Events.OutboxPollInterval)
+	}
+	if cfg.Events.OutboxBatchSize != 10 {
+		t.Fatalf("expected default outbox batch size, got %d", cfg.Events.OutboxBatchSize)
+	}
 }
 
 func TestLoadUsesEnvironmentOverrides(t *testing.T) {
@@ -85,6 +101,10 @@ func TestLoadUsesEnvironmentOverrides(t *testing.T) {
 	t.Setenv("DB_MAX_CONN_IDLE_TIME", "7m")
 	t.Setenv("JWT_SECRET", "override-secret")
 	t.Setenv("EVENT_PRODUCER", "kafka")
+	t.Setenv("KAFKA_BROKERS", "kafka-a:9092, kafka-b:9092")
+	t.Setenv("KAFKA_TOPIC", "companies")
+	t.Setenv("OUTBOX_POLL_INTERVAL", "500ms")
+	t.Setenv("OUTBOX_BATCH_SIZE", "25")
 
 	cfg, err := Load()
 	if err != nil {
@@ -127,6 +147,18 @@ func TestLoadUsesEnvironmentOverrides(t *testing.T) {
 	if cfg.Events.Producer != "kafka" {
 		t.Fatalf("expected overridden event producer, got %q", cfg.Events.Producer)
 	}
+	if strings.Join(cfg.Events.KafkaBrokers, ",") != "kafka-a:9092,kafka-b:9092" {
+		t.Fatalf("expected overridden kafka brokers, got %v", cfg.Events.KafkaBrokers)
+	}
+	if cfg.Events.KafkaTopic != "companies" {
+		t.Fatalf("expected overridden kafka topic, got %q", cfg.Events.KafkaTopic)
+	}
+	if cfg.Events.OutboxPollInterval != 500*time.Millisecond {
+		t.Fatalf("expected overridden outbox poll interval, got %s", cfg.Events.OutboxPollInterval)
+	}
+	if cfg.Events.OutboxBatchSize != 25 {
+		t.Fatalf("expected overridden outbox batch size, got %d", cfg.Events.OutboxBatchSize)
+	}
 }
 
 func TestLoadRequiresDatabaseURL(t *testing.T) {
@@ -163,6 +195,7 @@ func TestLoadFallsBackForInvalidOptionalValues(t *testing.T) {
 	t.Setenv("DB_MIN_CONNS", "also-not-an-int")
 	t.Setenv("HTTP_READ_TIMEOUT", "not-a-duration")
 	t.Setenv("DB_MAX_CONN_IDLE_TIME", "also-not-a-duration")
+	t.Setenv("OUTBOX_BATCH_SIZE", "not-an-int")
 
 	logOutput := captureLogOutput(t, func() {
 		cfg, err := Load()
@@ -181,6 +214,9 @@ func TestLoadFallsBackForInvalidOptionalValues(t *testing.T) {
 		}
 		if cfg.Database.MaxConnIdleTime != 30*time.Minute {
 			t.Fatalf("expected fallback max conn idle time, got %s", cfg.Database.MaxConnIdleTime)
+		}
+		if cfg.Events.OutboxBatchSize != 10 {
+			t.Fatalf("expected fallback outbox batch size, got %d", cfg.Events.OutboxBatchSize)
 		}
 	})
 
@@ -263,6 +299,30 @@ func TestGetDuration(t *testing.T) {
 			}
 			if tt.wantLogSubstr != "" && !strings.Contains(logOutput, tt.wantLogSubstr) {
 				t.Fatalf("expected log output to contain %q, got %q", tt.wantLogSubstr, logOutput)
+			}
+		})
+	}
+}
+
+func TestGetCSV(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		fallback []string
+		want     string
+	}{
+		{name: "empty", value: "", fallback: []string{"fallback:9092"}, want: "fallback:9092"},
+		{name: "valid", value: "one:9092,two:9092", fallback: []string{"fallback:9092"}, want: "one:9092,two:9092"},
+		{name: "trims empty values", value: " one:9092, , two:9092 ", fallback: []string{"fallback:9092"}, want: "one:9092,two:9092"},
+		{name: "only empty values", value: " , ", fallback: []string{"fallback:9092"}, want: "fallback:9092"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("CONFIG_TEST_CSV", tt.value)
+
+			if got := strings.Join(getCSV("CONFIG_TEST_CSV", tt.fallback), ","); got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
 			}
 		})
 	}

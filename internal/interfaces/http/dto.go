@@ -5,9 +5,12 @@ import (
 
 	appcompany "company-service/internal/application/company"
 	companydomain "company-service/internal/domain/company"
+
+	"github.com/google/uuid"
 )
 
 type createCompanyRequest struct {
+	ID                *string `json:"id"`
 	Name              *string `json:"name"`
 	Description       *string `json:"description"`
 	AmountOfEmployees *int    `json:"amount_of_employees"`
@@ -17,6 +20,9 @@ type createCompanyRequest struct {
 
 func (r createCompanyRequest) toInput() (appcompany.CreateInput, error) {
 	fields := make(map[string]string)
+	if r.ID == nil {
+		fields["id"] = "is required"
+	}
 	if r.Name == nil {
 		fields["name"] = "is required"
 	}
@@ -33,12 +39,20 @@ func (r createCompanyRequest) toInput() (appcompany.CreateInput, error) {
 		return appcompany.CreateInput{}, err
 	}
 
+	id, err := uuid.Parse(*r.ID)
+	if err != nil {
+		return appcompany.CreateInput{}, companydomain.NewValidationError(map[string]string{
+			"id": "must be a valid uuid",
+		})
+	}
+
 	description := ""
 	if r.Description != nil {
 		description = *r.Description
 	}
 
 	return appcompany.CreateInput{
+		ID:                id,
 		Name:              *r.Name,
 		Description:       description,
 		AmountOfEmployees: *r.AmountOfEmployees,

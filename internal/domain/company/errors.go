@@ -8,6 +8,7 @@ import (
 
 var (
 	ErrNotFound      = errors.New("company not found")
+	ErrDuplicateID   = errors.New("company id already exists")
 	ErrDuplicateName = errors.New("company name already exists")
 	ErrEmptyPatch    = errors.New("empty patch")
 )

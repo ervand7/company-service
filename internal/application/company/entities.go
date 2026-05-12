@@ -25,6 +25,16 @@ type EventProducer interface {
 	Close(ctx context.Context) error
 }
 
+//go:generate go run github.com/vektra/mockery/v2@v2.35.4 --dir . --name OutboxStore --output mocks --outpkg mocks --case underscore
+type OutboxStore interface {
+	Store(ctx context.Context, event Event) error
+}
+
+//go:generate go run github.com/vektra/mockery/v2@v2.35.4 --dir . --name TransactionRunner --output mocks --outpkg mocks --case underscore
+type TransactionRunner interface {
+	WithinTransaction(ctx context.Context, fn func(context.Context) error) error
+}
+
 //go:generate go run github.com/vektra/mockery/v2@v2.35.4 --dir . --name Logger --output mocks --outpkg mocks --case underscore
 type Logger interface {
 	Error() *zerolog.Event
@@ -38,7 +48,14 @@ type Event struct {
 	Company    *companydomain.Company
 }
 
+type OutboxEvent struct {
+	ID       uuid.UUID
+	Event    Event
+	Attempts int
+}
+
 type CreateInput struct {
+	ID                uuid.UUID
 	Name              string
 	Description       string
 	AmountOfEmployees int

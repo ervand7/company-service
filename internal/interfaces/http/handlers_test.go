@@ -46,6 +46,7 @@ func TestCreateCompanyHandlerSuccess(t *testing.T) {
 	})).Return(nil).Once()
 
 	rec := app.serve(nethttp.MethodPost, "/companies", `{
+		"id": "00000000-0000-0000-0000-000000000001",
 		"name": "Acme",
 		"description": "description",
 		"amount_of_employees": 10,
@@ -72,7 +73,7 @@ func TestCreateCompanyHandlerRejectsValidationError(t *testing.T) {
 	rec := app.serve(nethttp.MethodPost, "/companies", `{}`)
 
 	body := assertJSONError(t, rec, nethttp.StatusBadRequest, "validation failed")
-	for _, field := range []string{"name", "amount_of_employees", "registered", "type"} {
+	for _, field := range []string{"id", "name", "amount_of_employees", "registered", "type"} {
 		if body.Fields[field] != "is required" {
 			t.Fatalf("expected required validation for %s, got %q", field, body.Fields[field])
 		}
@@ -91,6 +92,19 @@ func TestCreateCompanyHandlerReturnsDuplicateName(t *testing.T) {
 	assertJSONError(t, rec, nethttp.StatusConflict, "company name already exists")
 	assertSingleLog(t, app.logs, nethttp.StatusConflict, "failed to create company")
 	app.repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+	app.events.AssertNotCalled(t, "Publish", mock.Anything, mock.Anything)
+}
+
+func TestCreateCompanyHandlerReturnsDuplicateID(t *testing.T) {
+	app := newHandlerTestApp(t)
+
+	app.repo.On("GetByName", mock.Anything, "Acme").Return((*companydomain.Company)(nil), companydomain.ErrNotFound).Once()
+	app.repo.On("Create", mock.Anything, mock.AnythingOfType("*company.Company")).Return(companydomain.ErrDuplicateID).Once()
+
+	rec := app.serve(nethttp.MethodPost, "/companies", validCreateCompanyJSON("Acme"))
+
+	assertJSONError(t, rec, nethttp.StatusConflict, "company id already exists")
+	assertSingleLog(t, app.logs, nethttp.StatusConflict, "failed to create company")
 	app.events.AssertNotCalled(t, "Publish", mock.Anything, mock.Anything)
 }
 
@@ -499,7 +513,7 @@ func (a handlerTestApp) serve(method, path, body string) *httptest.ResponseRecor
 }
 
 func validCreateCompanyJSON(name string) string {
-	return `{"name":` + strconvQuote(name) + `,"description":"description","amount_of_employees":10,"registered":true,"type":"Corporations"}`
+	return `{"id":` + strconvQuote(uuid.NewString()) + `,"name":` + strconvQuote(name) + `,"description":"description","amount_of_employees":10,"registered":true,"type":"Corporations"}`
 }
 
 func strconvQuote(value string) string {

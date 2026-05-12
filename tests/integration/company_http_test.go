@@ -16,9 +16,11 @@ import (
 	appcompany "company-service/internal/application/company"
 	"company-service/internal/config"
 	"company-service/internal/infrastructure/auth"
+	"company-service/internal/infrastructure/outbox"
 	"company-service/internal/infrastructure/postgres"
 	httpapi "company-service/internal/interfaces/http"
 
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/rs/zerolog"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -27,13 +29,16 @@ import (
 
 const testJWTSecret = "integration-test-secret"
 
-type noopProducer struct{}
+type recordingProducer struct {
+	events []appcompany.Event
+}
 
-func (noopProducer) Publish(context.Context, appcompany.Event) error {
+func (p *recordingProducer) Publish(_ context.Context, event appcompany.Event) error {
+	p.events = append(p.events, event)
 	return nil
 }
 
-func (noopProducer) Close(context.Context) error {
+func (p *recordingProducer) Close(context.Context) error {
 	return nil
 }
 
@@ -47,8 +52,10 @@ type companyResponse struct {
 }
 
 type testApp struct {
-	server *httptest.Server
-	token  string
+	server          *httptest.Server
+	token           string
+	outboxPublisher *outbox.Publisher
+	producer        *recordingProducer
 }
 
 func TestCompanyHTTPIntegration(t *testing.T) {
@@ -63,6 +70,7 @@ func TestCompanyHTTPIntegration(t *testing.T) {
 
 	t.Run("create validation errors return 400", func(t *testing.T) {
 		status, _ := app.do(t, http.MethodPost, "/companies", map[string]any{
+			"id":                  "not-a-uuid",
 			"name":                "",
 			"amount_of_employees": -1,
 			"registered":          true,
@@ -76,6 +84,7 @@ func TestCompanyHTTPIntegration(t *testing.T) {
 	var created companyResponse
 	t.Run("create success", func(t *testing.T) {
 		status, body := app.do(t, http.MethodPost, "/companies", map[string]any{
+			"id":                  "00000000-0000-0000-0000-000000000001",
 			"name":                "Acme",
 			"description":         "Original",
 			"amount_of_employees": 10,
@@ -91,8 +100,26 @@ func TestCompanyHTTPIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("outbox publisher publishes created event", func(t *testing.T) {
+		if len(app.producer.events) != 0 {
+			t.Fatalf("expected no events before outbox processing, got %d", len(app.producer.events))
+		}
+
+		if err := app.outboxPublisher.ProcessBatch(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if len(app.producer.events) != 1 {
+			t.Fatalf("expected one published event, got %d", len(app.producer.events))
+		}
+		event := app.producer.events[0]
+		if event.Type != appcompany.EventCompanyCreated || event.Company == nil || event.Company.Name != "Acme" {
+			t.Fatalf("unexpected published event: %+v", event)
+		}
+	})
+
 	t.Run("duplicate name returns 409", func(t *testing.T) {
 		status, _ := app.do(t, http.MethodPost, "/companies", map[string]any{
+			"id":                  "00000000-0000-0000-0000-000000000002",
 			"name":                "Acme",
 			"amount_of_employees": 5,
 			"registered":          true,
@@ -103,8 +130,15 @@ func TestCompanyHTTPIntegration(t *testing.T) {
 		}
 	})
 
-	t.Run("get not found returns 404", func(t *testing.T) {
+	t.Run("get created company returns company", func(t *testing.T) {
 		status, _ := app.do(t, http.MethodGet, "/companies/00000000-0000-0000-0000-000000000001", nil, "")
+		if status != http.StatusOK {
+			t.Fatalf("expected 200, got %d", status)
+		}
+	})
+
+	t.Run("get not found returns 404", func(t *testing.T) {
+		status, _ := app.do(t, http.MethodGet, "/companies/00000000-0000-0000-0000-000000000099", nil, "")
 		if status != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d", status)
 		}
@@ -184,16 +218,16 @@ func setupTestApp(t *testing.T) testApp {
 	}
 	t.Cleanup(pool.Close)
 
-	migration, err := os.ReadFile("../../migrations/000001_create_companies.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, string(migration)); err != nil {
-		t.Fatal(err)
-	}
+	applyMigration(t, ctx, pool, "../../migrations/000001_create_companies.up.sql")
+	applyMigration(t, ctx, pool, "../../migrations/000002_create_outbox_events.up.sql")
 
 	logger := zerolog.New(io.Discard)
-	service := appcompany.NewService(postgres.NewCompanyRepository(pool), noopProducer{}, &logger)
+	repository := postgres.NewCompanyRepository(pool)
+	outboxRepository := postgres.NewOutboxRepository(pool)
+	txManager := postgres.NewTransactionManager(pool)
+	producer := &recordingProducer{}
+	service := appcompany.NewServiceWithOutbox(repository, outboxRepository, txManager, &logger)
+	outboxPublisher := outbox.NewPublisher(outboxRepository, txManager, producer, time.Second, 10, logger)
 	jwtManager := auth.NewJWTManager(testJWTSecret)
 	router := httpapi.NewRouter(service, jwtManager, pool, logger)
 	server := httptest.NewServer(router)
@@ -204,7 +238,24 @@ func setupTestApp(t *testing.T) testApp {
 		t.Fatal(err)
 	}
 
-	return testApp{server: server, token: token}
+	return testApp{
+		server:          server,
+		token:           token,
+		outboxPublisher: outboxPublisher,
+		producer:        producer,
+	}
+}
+
+func applyMigration(t *testing.T, ctx context.Context, pool *pgxpool.Pool, path string) {
+	t.Helper()
+
+	migration, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, string(migration)); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func (a testApp) do(t *testing.T, method string, path string, payload any, token string) (int, []byte) {

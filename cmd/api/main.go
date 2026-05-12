@@ -12,6 +12,7 @@ import (
 	"company-service/internal/config"
 	"company-service/internal/infrastructure/auth"
 	"company-service/internal/infrastructure/events"
+	"company-service/internal/infrastructure/outbox"
 	"company-service/internal/infrastructure/postgres"
 	httpapi "company-service/internal/interfaces/http"
 
@@ -47,10 +48,23 @@ func main() {
 	}
 	defer dbPool.Close()
 
-	eventProducer := events.NewLogProducer(logger)
+	eventProducer, err := events.NewProducer(cfg.Events, logger)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to configure event producer")
+	}
 	repository := postgres.NewCompanyRepository(dbPool)
-	service := appcompany.NewService(repository, eventProducer, &logger)
+	outboxRepository := postgres.NewOutboxRepository(dbPool)
+	txManager := postgres.NewTransactionManager(dbPool)
+	service := appcompany.NewServiceWithOutbox(repository, outboxRepository, txManager, &logger)
 	jwtManager := auth.NewJWTManager(cfg.Auth.JWTSecret)
+	outboxPublisher := outbox.NewPublisher(
+		outboxRepository,
+		txManager,
+		eventProducer,
+		cfg.Events.OutboxPollInterval,
+		cfg.Events.OutboxBatchSize,
+		logger,
+	)
 
 	server := &nethttp.Server{
 		Addr:         cfg.HTTP.Addr,
@@ -67,6 +81,7 @@ func main() {
 			cancel()
 		}
 	}()
+	go outboxPublisher.Run(ctx)
 
 	<-ctx.Done()
 	logger.Info().Msg("shutdown signal received")

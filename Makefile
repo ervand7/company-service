@@ -25,7 +25,11 @@ fmt:
 mocks:
 	GO111MODULE=on go run github.com/vektra/mockery/v2@$(MOCKERY_VERSION) --dir internal/application/company --name Repository --output internal/application/company/mocks --outpkg mocks --case underscore
 	GO111MODULE=on go run github.com/vektra/mockery/v2@$(MOCKERY_VERSION) --dir internal/application/company --name EventProducer --output internal/application/company/mocks --outpkg mocks --case underscore
+	GO111MODULE=on go run github.com/vektra/mockery/v2@$(MOCKERY_VERSION) --dir internal/application/company --name OutboxStore --output internal/application/company/mocks --outpkg mocks --case underscore
+	GO111MODULE=on go run github.com/vektra/mockery/v2@$(MOCKERY_VERSION) --dir internal/application/company --name TransactionRunner --output internal/application/company/mocks --outpkg mocks --case underscore
 	GO111MODULE=on go run github.com/vektra/mockery/v2@$(MOCKERY_VERSION) --dir internal/application/company --name Logger --output internal/application/company/mocks --outpkg mocks --case underscore
+	GO111MODULE=on go run github.com/vektra/mockery/v2@$(MOCKERY_VERSION) --dir internal/infrastructure/outbox --name Repository --output internal/infrastructure/outbox/mocks --outpkg mocks --case underscore
+	GO111MODULE=on go run github.com/vektra/mockery/v2@$(MOCKERY_VERSION) --dir internal/infrastructure/outbox --name TransactionRunner --output internal/infrastructure/outbox/mocks --outpkg mocks --case underscore
 
 docker-up:
 	docker compose up --build

@@ -25,12 +25,20 @@ definitions:
         type: integer
       description:
         type: string
+      id:
+        type: string
       name:
         type: string
       registered:
         type: boolean
       type:
         type: string
+    required:
+    - id
+    - name
+    - amount_of_employees
+    - registered
+    - type
     type: object
   http.errorResponse:
     properties:

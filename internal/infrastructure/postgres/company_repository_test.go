@@ -58,6 +58,21 @@ func TestCompanyRepositoryIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("create maps duplicate id", func(t *testing.T) {
+		created := testCompany("DupID")
+		if err := repo.Create(ctx, created); err != nil {
+			t.Fatal(err)
+		}
+
+		duplicateID := testCompany("OtherDupID")
+		duplicateID.ID = created.ID
+
+		err := repo.Create(ctx, duplicateID)
+		if !errors.Is(err, companydomain.ErrDuplicateID) {
+			t.Fatalf("expected ErrDuplicateID, got %v", err)
+		}
+	})
+
 	t.Run("update persists fields", func(t *testing.T) {
 		created := testCompany("PatchCo")
 		if err := repo.Create(ctx, created); err != nil {
