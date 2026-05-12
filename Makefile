@@ -12,7 +12,7 @@ test:
 	go test ./...
 
 test-integration:
-	INTEGRATION_TESTS=1 go test -tags=integration ./tests/integration -count=1
+	INTEGRATION_TESTS=1 go test -tags=integration ./... -count=1
 
 vet:
 	go vet ./...
