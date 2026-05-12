@@ -340,13 +340,6 @@ const docTemplate = `{
         },
         "http.createCompanyRequest": {
             "type": "object",
-            "required": [
-                "id",
-                "name",
-                "amount_of_employees",
-                "registered",
-                "type"
-            ],
             "properties": {
                 "amount_of_employees": {
                     "type": "integer"
