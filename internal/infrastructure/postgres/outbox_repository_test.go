@@ -58,6 +58,9 @@ func TestOutboxRepositoryIntegration(t *testing.T) {
 		if err := repo.Store(ctx, future); err != nil {
 			t.Fatal(err)
 		}
+		if _, err := pool.Exec(ctx, "UPDATE outbox_events SET available_at = $1 WHERE id = $2", future.OccurredAt, future.ID); err != nil {
+			t.Fatal(err)
+		}
 		if err := repo.Store(ctx, published); err != nil {
 			t.Fatal(err)
 		}

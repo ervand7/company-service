@@ -27,8 +27,8 @@ func (r *OutboxRepository) Store(ctx context.Context, event appcompany.Event) er
 	}
 
 	query, args, err := psql.Insert("outbox_events").
-		Columns("id", "event_type", "aggregate_id", "payload", "created_at", "available_at").
-		Values(event.ID, event.Type, event.CompanyID, payload, event.OccurredAt, event.OccurredAt).
+		Columns("id", "event_type", "aggregate_id", "payload", "created_at").
+		Values(event.ID, event.Type, event.CompanyID, payload, event.OccurredAt).
 		ToSql()
 	if err != nil {
 		return fmt.Errorf("build store outbox event query: %w", err)

@@ -285,7 +285,11 @@ func (a testApp) do(t *testing.T, method string, path string, payload any, token
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			t.Logf("failed to close response body: %v", err)
+		}
+	}()
 
 	raw, err := io.ReadAll(res.Body)
 	if err != nil {

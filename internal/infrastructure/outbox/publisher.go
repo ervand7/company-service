@@ -11,14 +11,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
-//go:generate go run github.com/vektra/mockery/v2@v2.35.4 --dir . --name Repository --output mocks --outpkg mocks --case underscore
+//go:generate go run github.com/vektra/mockery/v2@v2.53.6 --dir . --name Repository --output mocks --outpkg mocks --case underscore
 type Repository interface {
 	FetchPending(ctx context.Context, limit uint64) ([]appcompany.OutboxEvent, error)
 	MarkPublished(ctx context.Context, id uuid.UUID) error
 	MarkFailed(ctx context.Context, id uuid.UUID, err error) error
 }
 
-//go:generate go run github.com/vektra/mockery/v2@v2.35.4 --dir . --name TransactionRunner --output mocks --outpkg mocks --case underscore
+//go:generate go run github.com/vektra/mockery/v2@v2.53.6 --dir . --name TransactionRunner --output mocks --outpkg mocks --case underscore
 type TransactionRunner interface {
 	WithinTransaction(ctx context.Context, fn func(context.Context) error) error
 }

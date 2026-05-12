@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-//go:generate go run github.com/vektra/mockery/v2@v2.35.4 --dir . --name Repository --output mocks --outpkg mocks --case underscore
+//go:generate go run github.com/vektra/mockery/v2@v2.53.6 --dir . --name Repository --output mocks --outpkg mocks --case underscore
 type Repository interface {
 	Create(ctx context.Context, company *companydomain.Company) error
 	Update(ctx context.Context, company *companydomain.Company) error
@@ -19,23 +19,23 @@ type Repository interface {
 	GetByName(ctx context.Context, name string) (*companydomain.Company, error)
 }
 
-//go:generate go run github.com/vektra/mockery/v2@v2.35.4 --dir . --name EventProducer --output mocks --outpkg mocks --case underscore
+//go:generate go run github.com/vektra/mockery/v2@v2.53.6 --dir . --name EventProducer --output mocks --outpkg mocks --case underscore
 type EventProducer interface {
 	Publish(ctx context.Context, event Event) error
 	Close(ctx context.Context) error
 }
 
-//go:generate go run github.com/vektra/mockery/v2@v2.35.4 --dir . --name OutboxStore --output mocks --outpkg mocks --case underscore
+//go:generate go run github.com/vektra/mockery/v2@v2.53.6 --dir . --name OutboxStore --output mocks --outpkg mocks --case underscore
 type OutboxStore interface {
 	Store(ctx context.Context, event Event) error
 }
 
-//go:generate go run github.com/vektra/mockery/v2@v2.35.4 --dir . --name TransactionRunner --output mocks --outpkg mocks --case underscore
+//go:generate go run github.com/vektra/mockery/v2@v2.53.6 --dir . --name TransactionRunner --output mocks --outpkg mocks --case underscore
 type TransactionRunner interface {
 	WithinTransaction(ctx context.Context, fn func(context.Context) error) error
 }
 
-//go:generate go run github.com/vektra/mockery/v2@v2.35.4 --dir . --name Logger --output mocks --outpkg mocks --case underscore
+//go:generate go run github.com/vektra/mockery/v2@v2.53.6 --dir . --name Logger --output mocks --outpkg mocks --case underscore
 type Logger interface {
 	Error() *zerolog.Event
 }

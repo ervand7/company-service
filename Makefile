@@ -1,6 +1,6 @@
 -include .env
 
-MOCKERY_VERSION := v2.35.4
+MOCKERY_VERSION := v2.53.6
 
 .PHONY: run test test-integration vet lint fmt mocks docker-up docker-down migrate-up migrate-down jwt
 
@@ -17,7 +17,7 @@ vet:
 	go vet ./...
 
 lint:
-	golangci-lint run ./...
+	GO111MODULE=on golangci-lint run ./...
 
 fmt:
 	gofmt -w $$(find . -name '*.go' -not -path './vendor/*')
